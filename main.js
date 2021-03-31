@@ -34,7 +34,7 @@ async function main() {
     .on("data", function (transactionHash) {
       web3.eth.getTransaction(transactionHash).then((result) => {
         if (result !== null) {
-          if (result.to == uniswapRouterAddress) {
+          if (result.to == UNISWAP_ROUTER_ADDRESS) {
             console.log(result);
           }
         }
