@@ -2,12 +2,12 @@ import Web3 from "web3";
 import AWSWebsocketProvider from "./aws-websocket-provider.js";
 import InputDataDecoder from "ethereum-input-data-decoder";
 
-const {
+import {
   UNISWAP_ROUTER_ADDRESS,
   ACCOUNT_ADDRESS,
   TARGET_TOKEN_ADDRESSES_LIST,
   WEI,
-} = require("./constants.js");
+} from "./constants.js";
 
 const WS_ENDPOINT = process.env.AMB_WS_ENDPOINT;
 const decoder = new InputDataDecoder(`contract_abi.json`);
