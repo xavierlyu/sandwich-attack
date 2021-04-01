@@ -5,6 +5,7 @@ import InputDataDecoder from "ethereum-input-data-decoder";
 const {
   UNISWAP_ROUTER_ADDRESS,
   ACCOUNT_ADDRESS,
+  TARGET_TOKEN_ADDRESSES_LIST,
   WEI,
 } = require("./constants.js");
 
