@@ -13,7 +13,7 @@ const web3;
 
 let uniswapRouter;
 
-async function handleTransaction(transaction, user_wallet) {
+export async function handleTransaction(transaction, user_wallet) {
   web3 = new Web3(new AWSHttpProvider(HTTP_ENDPOINT));
 
   uniswapRouter = new web3.eth.Contract(
@@ -24,5 +24,3 @@ async function handleTransaction(transaction, user_wallet) {
   let gasPrice = parseInt(transaction["gasPrice"]);
   let newGasPrice = gasPrice * 2;
 }
-
-module.exports = { handleTransaction };

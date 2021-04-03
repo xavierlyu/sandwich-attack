@@ -1,5 +1,3 @@
-import InputDataDecoder from "ethereum-input-data-decoder";
-
 export const UNISWAP_ROUTER_ADDRESS =
   "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // capitalization matters
 export const ACCOUNT_ADDRESS = "0xFc66f9b4104317165f800BDa7BB31E2577970158";

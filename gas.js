@@ -10,10 +10,10 @@ export default async function getGasPrice(
     )
     .then((response) => {
       return {
-        fast: response.data.fast,
-        fastest: response.data.fastest,
-        safeLow: response.data.safeLow,
-        average: response.data.average,
+        fast: response.data.fast / 10.0,
+        fastest: response.data.fastest / 10.0,
+        safeLow: response.data.safeLow / 10.0,
+        average: response.data.average / 10.0,
       };
     });
 }
