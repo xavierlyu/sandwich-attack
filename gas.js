@@ -18,4 +18,4 @@ export default async function getGasPrice(
     });
 }
 
-// getGasPrice(undefined, function(arg){console.log(arg)});
+//getGasPrice().then((response) => console.log(response));
