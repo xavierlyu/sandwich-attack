@@ -8,6 +8,7 @@ import {
   TARGET_TOKEN_ADDRESSES_LIST,
   WEI,
 } from "./constants.js";
+import getGasPrice from "./gas.js";
 
 const WS_ENDPOINT = process.env.AMB_WS_ENDPOINT;
 const decoder = new InputDataDecoder(`contract_abi.json`);
@@ -28,6 +29,8 @@ async function main() {
   balance = web3.eth.getBalance(user_wallet.address) / WEI; // in ether
 
   // retrieving gas info
+  var gas = await getGasPrice();
+  console.log(gas);
 
   // listen for pending txns
   var subscription = web3.eth
