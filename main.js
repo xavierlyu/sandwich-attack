@@ -22,12 +22,12 @@ let balance; // in ether
 
 async function main() {
   // setting up web3
-  // web3 = new Web3(new AWSWebsocketProvider(WS_ENDPOINT));
-  web3 = new Web3(
-    new Web3.providers.WebsocketProvider(
-      "wss://mainnet.infura.io/ws/v3/af1d3ad9016c423282f5875d6e2dc6a7"
-    )
-  );
+  web3 = new Web3(new AWSWebsocketProvider(WS_ENDPOINT));
+  // web3 = new Web3(
+  //   new Web3.providers.WebsocketProvider(
+  //     "wss://mainnet.infura.io/ws/v3/af1d3ad9016c423282f5875d6e2dc6a7"
+  //   )
+  // );
 
   // setting up accounts
   user_wallet = web3.eth.accounts.privateKeyToAccount(
@@ -58,8 +58,9 @@ async function main() {
         if (
           result !== null &&
           result.to == UNISWAP_ROUTER_ADDRESS &&
-          parseInt(result.gasPrice) / GWEI < gas.average &&
-          parseInt(result.gasPrice) / GWEI > gas.safeLow * 0.75
+          result.blockHash == null &&
+          parseInt(result.gasPrice) / GWEI < gas.fast &&
+          parseInt(result.gasPrice) / GWEI > gas.average * 0.75
         ) {
           handleTransaction(
             UNISWAP_ROUTER,

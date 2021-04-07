@@ -27,12 +27,35 @@ export default function handleTransaction(
 ) {
   let decodedData = abiDecoder.decodeData(transaction.input);
 
-  if (decodedData.method == "swapETHForExactTokens") {
-    console.log(transaction);
-    console.log(abiDecoder.decodeData(transaction.input));
-  } else {
+  if (decodedData.method != "swapETHForExactTokens") {
     return;
   }
+
+  if (transaction.value / WEI < 0.001) {
+    // if less than 0.001 ETH is being transacted
+    console.log("too small");
+    return;
+  }
+
+  let deadline = parseInt(
+    JSON.stringify(decodedData.inputs[3]).slice(1, -1),
+    16
+  );
+  if (deadline < Math.ceil(Date.now() / 1000)) {
+    console.log(`too late ${transaction.hash}`);
+    return;
+  }
+
+  if (transaction.blockHash != null) {
+    return;
+  }
+
+  console.log(transaction);
+  console.log(JSON.stringify(decodedData));
+  let amountOut =
+    parseInt(JSON.stringify(decodedData.inputs[0]).slice(1, -1), 16) / WEI;
+  let targetToken = decodedData.inputs[1][1];
+  console.log(amountOut);
 
   let gasPrice = parseInt(transaction["gasPrice"]);
   let newGasPrice = gasPrice * 2;
