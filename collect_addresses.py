@@ -46,7 +46,7 @@ assert query_job.state == 'DONE'
 
 obj = {
     'relayers': list(relayers),
-    'pairs': list(relayers)
+    'pairs': list(pairs)
 }
 
 json.dump(obj,  open("uniswap_relayers_pairs.json", "w")) 
