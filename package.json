@@ -1,6 +1,7 @@
 {
     "type": "module",
     "dependencies": {
+        "@aws-sdk/client-kinesis": "^3.13.1",
         "aws-sdk": "^2.879.0",
         "axios": "^0.21.1",
         "ethereum-input-data-decoder": "^0.3.2",
