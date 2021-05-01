@@ -13,6 +13,8 @@ import {
   UNISWAP_ROUTER_ABI,
 } from "./constants.js";
 
+import logToStream from "./db_client.js"
+
 const HTTP_ENDPOINT = process.env.AMB_HTTP_ENDPOINT;
 const abiDecoder = new InputDataDecoder(UNISWAP_ROUTER_ABI);
 const web3 = new Web3(new AWSHttpProvider(HTTP_ENDPOINT));
@@ -56,6 +58,8 @@ export default function handleTransaction(
     parseInt(JSON.stringify(decodedData.inputs[0]).slice(1, -1), 16) / WEI;
   let targetToken = decodedData.inputs[1][1];
   console.log(amountOut);
+
+  logToStream(transaction);
 
   let gasPrice = parseInt(transaction["gasPrice"]);
   let newGasPrice = gasPrice * 2;
