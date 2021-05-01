@@ -1,6 +1,7 @@
 {
     "type": "module",
     "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.14.0",
         "@aws-sdk/client-kinesis": "^3.13.1",
         "aws-sdk": "^2.879.0",
         "axios": "^0.21.1",
