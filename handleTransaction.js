@@ -13,6 +13,8 @@ import {
   UNISWAP_ROUTER_ABI,
 } from "./constants.js";
 
+import logToStream from "./db_client.js"
+
 const HTTP_ENDPOINT = process.env.AMB_HTTP_ENDPOINT;
 const abiDecoder = new InputDataDecoder(UNISWAP_ROUTER_ABI);
 const web3 = new Web3(new AWSHttpProvider(HTTP_ENDPOINT));
@@ -62,6 +64,8 @@ export default async function handleTransaction(
   // TODO double check if `targetToken` is not a stablecoin
 
   // console.log(amountOut);
+
+  logToStream(transaction);
 
   let gasPrice = parseInt(transaction["gasPrice"]);
   let newGasPrice = gasPrice * 2;
