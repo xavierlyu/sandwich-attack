@@ -13,7 +13,7 @@ import {
   UNISWAP_ROUTER_ABI,
 } from "./constants.js";
 
-import logToDynamo from "./db_client.js"
+import { logToDynamo } from "./db_client.js";
 
 const HTTP_ENDPOINT = process.env.AMB_HTTP_ENDPOINT;
 const abiDecoder = new InputDataDecoder(UNISWAP_ROUTER_ABI);
@@ -53,7 +53,6 @@ export default async function handleTransaction(
   }
 
   console.log(transaction);
-  // console.log(JSON.stringify(decodedData));
 
   let to = decodedData.inputs[1];
 
@@ -62,8 +61,6 @@ export default async function handleTransaction(
   let targetToken = decodedData.inputs[1][1];
 
   // TODO double check if `targetToken` is not a stablecoin
-
-  // console.log(amountOut);
 
   logToDynamo(transaction);
 
@@ -100,11 +97,31 @@ export default async function handleTransaction(
     gas: (300000).toString(),
     gasPrice: newGasPrice,
     data: encodedABI,
-    value: 0.0036 * WEI, // idk lol this is like $10 USD
+    value: 0.002 * WEI, // idk lol this is like $10 USD
+    chainId: 1,
   };
 
-  let signedTx = user_wallet.signTransaction(tx);
+  let rawTransaction;
+  await user_wallet.signTransaction(tx).then((encodedTransaction) => {
+    console.log(encodedTransaction);
+    rawTransaction = encodedTransaction.rawTransaction;
+  });
 
-  console.log("ye");
-  console.log(signedTx);
+  await web3.eth
+    .sendSignedTransaction(rawTransaction)
+    .on("transactionHash", function (hash) {
+      console.log("transactionHash: ", hash);
+    })
+    .on("confirmation", function (confirmationNumber, receipt) {
+      console.log("confirmationNumber: ", confirmationNumber);
+      console.log("receipt: ", receipt);
+    })
+    .on("receipt", function (receipt) {
+      console.log("receipt: ", receipt);
+    })
+    .on("error", function (error, receipt) {
+      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
+      console.log("error: ", error);
+      console.log("receipt: ", receipt);
+    });
 }
