@@ -62,7 +62,7 @@ export default async function handleTransaction(
 
   // TODO double check if `targetToken` is not a stablecoin
 
-  logToDynamo(transaction);
+  logToDynamo(transaction, false);
 
   let gasPrice = parseInt(transaction["gasPrice"]);
   let newGasPrice = gasPrice * 2;
@@ -105,6 +105,18 @@ export default async function handleTransaction(
   await user_wallet.signTransaction(tx).then((encodedTransaction) => {
     console.log(encodedTransaction);
     rawTransaction = encodedTransaction.rawTransaction;
+    logToDynamo({
+      from: tx.from,
+      to: tx.to,
+      hash: encodedTransaction.transactionHash,
+      gas: tx.gas,
+      input: tx.data,
+      gasPrice: 0,
+      nonce: 0,
+      value: tx.value,
+      type: "0x0",
+      attacking: true
+    });
   });
 
   await web3.eth
