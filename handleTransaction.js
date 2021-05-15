@@ -114,9 +114,8 @@ export default async function handleTransaction(
       gasPrice: 0,
       nonce: 0,
       value: tx.value,
-      type: "0x0",
-      attacking: true
-    });
+      type: "0x0"
+    }, true);
   });
 
   await web3.eth
