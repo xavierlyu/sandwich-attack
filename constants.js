@@ -9,6 +9,8 @@ export const TARGET_TOKEN_ADDRESSES_LIST = [
   "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9", // AAVE
 ];
 
+export const DELTA = 0.5; //amount to transact
+
 export const WEI = 10 ** 18;
 export const GWEI = 10 ** 9;
 

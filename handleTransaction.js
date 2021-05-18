@@ -2,13 +2,9 @@ import InputDataDecoder from "ethereum-input-data-decoder";
 
 import {
   UNISWAP_ROUTER_ADDRESS,
-  UNISWAP_FACTORY_ADDRESS,
-  ACCOUNT_ADDRESS,
-  TARGET_TOKEN_ADDRESSES_LIST,
   WEI,
-  GWEI,
-  UNISWAP_FACTORY_ABI,
   UNISWAP_ROUTER_ABI,
+  DELTA,
 } from "./constants.js";
 
 import { logToDynamo } from "./db_client.js";
@@ -17,7 +13,6 @@ const abiDecoder = new InputDataDecoder(UNISWAP_ROUTER_ABI);
 
 export default async function handleTransaction(
   web3,
-  subscription,
   UNISWAP_ROUTER,
   user_wallet,
   transaction
@@ -33,7 +28,7 @@ export default async function handleTransaction(
     return;
   }
 
-  if (transaction.value / WEI < 0.001) {
+  if (transaction.value / WEI < 0.1) {
     // if less than 0.001 ETH is being transacted
     console.log("too small");
     return;
@@ -52,13 +47,14 @@ export default async function handleTransaction(
     return;
   }
 
-  console.log(`POSSIBLE TXN SPOTTED: ${transaction.hash}`);
-
   let to = decodedData.inputs[1];
 
-  let amountOut =
-    parseInt(JSON.stringify(decodedData.inputs[0]).slice(1, -1), 16) / WEI;
-  let targetToken = decodedData.inputs[1][1];
+  console.log(`POSSIBLE TXN SPOTTED: ${transaction.hash}`);
+  subscription.unsubscribe();
+
+  // let amountOut =
+  //   parseInt(JSON.stringify(decodedData.inputs[0]).slice(1, -1), 16) / WEI;
+  // let targetToken = decodedData.inputs[1][1];
 
   victimTxnHash = transaction["hash"];
 
@@ -70,7 +66,7 @@ export default async function handleTransaction(
   to = to.map((address) => "0x" + address);
 
   let tokenAmount = await UNISWAP_ROUTER.methods
-    .getAmountsOut(web3.utils.toWei("0.002", "Ether"), to)
+    .getAmountsOut(web3.utils.toWei(DELTA.toString(), "Ether"), to)
     .call();
 
   // calculating deadline
@@ -95,29 +91,28 @@ export default async function handleTransaction(
     gas: (300000).toString(),
     gasPrice: newGasPrice,
     data: open_encodedABI,
-    value: 0.002 * WEI, // idk lol this is like $10 USD
+    value: DELTA * WEI, // idk lol this is like $10 USD
     chainId: 1,
   };
 
   let rawTransaction;
   await user_wallet.signTransaction(open_tx).then((encodedTransaction) => {
-    console.log(encodedTransaction);
     rawTransaction = encodedTransaction.rawTransaction;
     openTxnHash = encodedTransaction.transactionHash;
   });
 
-  // await web3.eth
-  //   .sendSignedTransaction(rawTransaction)
-  //   .on("transactionHash", function (hash) {
-  //     console.log("transactionHash: ", hash);
-  //   })
-  //   .on("confirmation", function (confirmationNumber, receipt) {
-  //     console.log("confirmationNumber: ", confirmationNumber);
-  //   })
-  //   .on("error", function (error, receipt) {
-  //     // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
-  //     console.log("error: ", error);
-  //   });
+  await web3.eth
+    .sendSignedTransaction(rawTransaction)
+    .on("transactionHash", function (hash) {
+      console.log("transactionHash: ", hash);
+    })
+    .on("confirmation", function (confirmationNumber, receipt) {
+      console.log("confirmationNumber: ", confirmationNumber);
+    })
+    .on("error", function (error, receipt) {
+      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
+      console.log("error: ", error);
+    });
 
   // calculating deadline
   await web3.eth.getBlock("latest", (error, block) => {
@@ -127,7 +122,7 @@ export default async function handleTransaction(
   deadline = web3.utils.toHex(deadline);
 
   let close_swap = UNISWAP_ROUTER.methods.swapTokensForExactETH(
-    (0.002 * WEI).toString(),
+    (DELTA * WEI).toString(),
     parseInt(tokenAmount[1] * 0.995).toString(),
     [to[1], to[0]],
     user_wallet.address,
@@ -140,9 +135,9 @@ export default async function handleTransaction(
     from: user_wallet.address,
     to: UNISWAP_ROUTER_ADDRESS,
     gas: (300000).toString(),
-    gasPrice: gasPrice / 2,
+    gasPrice: gasPrice * 0.7,
     data: close_encodedABI,
-    value: 0.002 * WEI, // idk lol this is like $10 USD
+    value: 0,
     chainId: 1,
   };
 
@@ -153,16 +148,16 @@ export default async function handleTransaction(
 
   logToDynamo(victimTxnHash, openTxnHash, closeTxnHash);
 
-  // await web3.eth
-  //   .sendSignedTransaction(rawTransaction)
-  //   .on("transactionHash", function (hash) {
-  //     console.log("transactionHash: ", hash);
-  //   })
-  //   .on("confirmation", function (confirmationNumber, receipt) {
-  //     console.log("confirmationNumber: ", confirmationNumber);
-  //   })
-  //   .on("error", function (error, receipt) {
-  //     // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
-  //     console.log("error: ", error);
-  //   });
+  await web3.eth
+    .sendSignedTransaction(rawTransaction)
+    .on("transactionHash", function (hash) {
+      console.log("transactionHash: ", hash);
+    })
+    .on("confirmation", function (confirmationNumber, receipt) {
+      console.log("confirmationNumber: ", confirmationNumber);
+    })
+    .on("error", function (error, receipt) {
+      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
+      console.log("error: ", error);
+    });
 }
