@@ -1,5 +1,3 @@
-import Web3 from "web3";
-import AWSHttpProvider from "./aws-http-provider.js";
 import InputDataDecoder from "ethereum-input-data-decoder";
 
 import {
@@ -15,21 +13,23 @@ import {
 
 import { logToDynamo } from "./db_client.js";
 
-const HTTP_ENDPOINT = process.env.AMB_HTTP_ENDPOINT;
 const abiDecoder = new InputDataDecoder(UNISWAP_ROUTER_ABI);
-const web3 = new Web3(new AWSHttpProvider(HTTP_ENDPOINT));
-
-let uniswapRouter;
 
 export default async function handleTransaction(
+  web3,
+  subscription,
   UNISWAP_ROUTER,
-  UNISWAP_FACTORY,
   user_wallet,
   transaction
 ) {
+  var victimTxnHash, openTxnHash, closeTxnHash;
+
   let decodedData = abiDecoder.decodeData(transaction.input);
 
-  if (decodedData.method != "swapETHForExactTokens") {
+  if (
+    decodedData.method != "swapETHForExactTokens" &&
+    decodedData.method != "swapExactETHForTokens"
+  ) {
     return;
   }
 
@@ -52,7 +52,7 @@ export default async function handleTransaction(
     return;
   }
 
-  console.log(transaction);
+  console.log(`POSSIBLE TXN SPOTTED: ${transaction.hash}`);
 
   let to = decodedData.inputs[1];
 
@@ -60,20 +60,18 @@ export default async function handleTransaction(
     parseInt(JSON.stringify(decodedData.inputs[0]).slice(1, -1), 16) / WEI;
   let targetToken = decodedData.inputs[1][1];
 
+  victimTxnHash = transaction["hash"];
+
   // TODO double check if `targetToken` is not a stablecoin
 
-  logToDynamo(transaction, false);
-
   let gasPrice = parseInt(transaction["gasPrice"]);
-  let newGasPrice = gasPrice * 2;
+  let newGasPrice = gasPrice * 1.3;
 
   to = to.map((address) => "0x" + address);
 
-  const tokenAmount = await UNISWAP_ROUTER.methods
-    .getAmountsOut(web3.utils.toWei("1", "Ether"), to)
+  let tokenAmount = await UNISWAP_ROUTER.methods
+    .getAmountsOut(web3.utils.toWei("0.002", "Ether"), to)
     .call();
-
-  console.log(tokenAmount[1].toString());
 
   // calculating deadline
   await web3.eth.getBlock("latest", (error, block) => {
@@ -82,57 +80,89 @@ export default async function handleTransaction(
 
   deadline = web3.utils.toHex(deadline);
 
-  let swap = UNISWAP_ROUTER.methods.swapETHForExactTokens(
-    tokenAmount[1].toString(),
+  let open_swap = UNISWAP_ROUTER.methods.swapETHForExactTokens(
+    parseInt(tokenAmount[1] * 0.995).toString(),
     to,
     user_wallet.address,
     deadline
   );
 
-  let encodedABI = swap.encodeABI();
+  let open_encodedABI = open_swap.encodeABI();
 
-  let tx = {
+  let open_tx = {
     from: user_wallet.address,
     to: UNISWAP_ROUTER_ADDRESS,
     gas: (300000).toString(),
     gasPrice: newGasPrice,
-    data: encodedABI,
+    data: open_encodedABI,
     value: 0.002 * WEI, // idk lol this is like $10 USD
     chainId: 1,
   };
 
   let rawTransaction;
-  await user_wallet.signTransaction(tx).then((encodedTransaction) => {
+  await user_wallet.signTransaction(open_tx).then((encodedTransaction) => {
     console.log(encodedTransaction);
     rawTransaction = encodedTransaction.rawTransaction;
-    logToDynamo({
-      from: tx.from,
-      to: tx.to,
-      hash: encodedTransaction.transactionHash,
-      gas: tx.gas,
-      input: tx.data,
-      gasPrice: 0,
-      nonce: 0,
-      value: tx.value,
-      type: "0x0"
-    }, true);
+    openTxnHash = encodedTransaction.transactionHash;
   });
 
-  await web3.eth
-    .sendSignedTransaction(rawTransaction)
-    .on("transactionHash", function (hash) {
-      console.log("transactionHash: ", hash);
-    })
-    .on("confirmation", function (confirmationNumber, receipt) {
-      console.log("confirmationNumber: ", confirmationNumber);
-      console.log("receipt: ", receipt);
-    })
-    .on("receipt", function (receipt) {
-      console.log("receipt: ", receipt);
-    })
-    .on("error", function (error, receipt) {
-      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
-      console.log("error: ", error);
-      console.log("receipt: ", receipt);
-    });
+  // await web3.eth
+  //   .sendSignedTransaction(rawTransaction)
+  //   .on("transactionHash", function (hash) {
+  //     console.log("transactionHash: ", hash);
+  //   })
+  //   .on("confirmation", function (confirmationNumber, receipt) {
+  //     console.log("confirmationNumber: ", confirmationNumber);
+  //   })
+  //   .on("error", function (error, receipt) {
+  //     // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
+  //     console.log("error: ", error);
+  //   });
+
+  // calculating deadline
+  await web3.eth.getBlock("latest", (error, block) => {
+    deadline = block.timestamp + 600; // transaction expires in 600 seconds (10 minutes)
+  });
+
+  deadline = web3.utils.toHex(deadline);
+
+  let close_swap = UNISWAP_ROUTER.methods.swapTokensForExactETH(
+    (0.002 * WEI).toString(),
+    parseInt(tokenAmount[1] * 0.995).toString(),
+    [to[1], to[0]],
+    user_wallet.address,
+    deadline
+  );
+
+  let close_encodedABI = close_swap.encodeABI();
+
+  let close_tx = {
+    from: user_wallet.address,
+    to: UNISWAP_ROUTER_ADDRESS,
+    gas: (300000).toString(),
+    gasPrice: gasPrice / 2,
+    data: close_encodedABI,
+    value: 0.002 * WEI, // idk lol this is like $10 USD
+    chainId: 1,
+  };
+
+  await user_wallet.signTransaction(close_tx).then((encodedTransaction) => {
+    rawTransaction = encodedTransaction.rawTransaction;
+    closeTxnHash = encodedTransaction.transactionHash;
+  });
+
+  logToDynamo(victimTxnHash, openTxnHash, closeTxnHash);
+
+  // await web3.eth
+  //   .sendSignedTransaction(rawTransaction)
+  //   .on("transactionHash", function (hash) {
+  //     console.log("transactionHash: ", hash);
+  //   })
+  //   .on("confirmation", function (confirmationNumber, receipt) {
+  //     console.log("confirmationNumber: ", confirmationNumber);
+  //   })
+  //   .on("error", function (error, receipt) {
+  //     // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
+  //     console.log("error: ", error);
+  //   });
 }
