@@ -1,3 +1,5 @@
+import Web3 from "web3";
+
 import InputDataDecoder from "ethereum-input-data-decoder";
 
 import {
@@ -11,13 +13,24 @@ import { logToDynamo } from "./db_client.js";
 
 const abiDecoder = new InputDataDecoder(UNISWAP_ROUTER_ABI);
 
+const isRopsten = true;
+
 export default async function handleTransaction(
   web3,
+  subscription,
   UNISWAP_ROUTER,
   user_wallet,
   transaction
 ) {
   var victimTxnHash, openTxnHash, closeTxnHash;
+
+  const web3_finalstep = isRopsten
+    ? new Web3(
+        new Web3.providers.HttpProvider(
+          "https://ropsten.infura.io/v3/af1d3ad9016c423282f5875d6e2dc6a7"
+        )
+      )
+    : web3;
 
   let decodedData = abiDecoder.decodeData(transaction.input);
 
@@ -29,8 +42,8 @@ export default async function handleTransaction(
   }
 
   if (transaction.value / WEI < 0.1) {
-    // if less than 0.001 ETH is being transacted
-    console.log("too small");
+    // if less than 0.1 ETH is being transacted
+    console.log("Skipped: amount of ether is too small for profitability");
     return;
   }
 
@@ -39,26 +52,23 @@ export default async function handleTransaction(
     16
   );
   if (deadline < Math.ceil(Date.now() / 1000)) {
-    console.log(`too late ${transaction.hash}`);
+    console.log("Skipped: passed deadline");
     return;
   }
 
   if (transaction.blockHash != null) {
+    console.log("Skipped: transaction is no longer pending");
     return;
   }
 
   let to = decodedData.inputs[1];
 
   console.log(`POSSIBLE TXN SPOTTED: ${transaction.hash}`);
-  subscription.unsubscribe();
-
-  // let amountOut =
-  //   parseInt(JSON.stringify(decodedData.inputs[0]).slice(1, -1), 16) / WEI;
-  // let targetToken = decodedData.inputs[1][1];
+  subscription.unsubscribe(function (error, success) {
+    if (success) console.log("Successfully unsubscribed!");
+  });
 
   victimTxnHash = transaction["hash"];
-
-  // TODO double check if `targetToken` is not a stablecoin
 
   let gasPrice = parseInt(transaction["gasPrice"]);
   let newGasPrice = gasPrice * 1.3;
@@ -76,6 +86,11 @@ export default async function handleTransaction(
 
   deadline = web3.utils.toHex(deadline);
 
+  let nonce;
+  await web3_finalstep.eth
+    .getTransactionCount(user_wallet.address)
+    .then((data) => (nonce = data));
+
   let open_swap = UNISWAP_ROUTER.methods.swapETHForExactTokens(
     parseInt(tokenAmount[1] * 0.995).toString(),
     to,
@@ -89,37 +104,18 @@ export default async function handleTransaction(
     from: user_wallet.address,
     to: UNISWAP_ROUTER_ADDRESS,
     gas: (300000).toString(),
-    gasPrice: newGasPrice,
+    gasPrice: parseInt(newGasPrice),
     data: open_encodedABI,
-    value: DELTA * WEI, // idk lol this is like $10 USD
-    chainId: 1,
+    value: DELTA * WEI,
+    chainId: isRopsten ? 3 : 1, // mainnet = 1
+    nonce: nonce,
   };
 
-  let rawTransaction;
+  let rawOpenTransaction;
   await user_wallet.signTransaction(open_tx).then((encodedTransaction) => {
-    rawTransaction = encodedTransaction.rawTransaction;
+    rawOpenTransaction = encodedTransaction.rawTransaction;
     openTxnHash = encodedTransaction.transactionHash;
   });
-
-  await web3.eth
-    .sendSignedTransaction(rawTransaction)
-    .on("transactionHash", function (hash) {
-      console.log("transactionHash: ", hash);
-    })
-    .on("confirmation", function (confirmationNumber, receipt) {
-      console.log("confirmationNumber: ", confirmationNumber);
-    })
-    .on("error", function (error, receipt) {
-      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
-      console.log("error: ", error);
-    });
-
-  // calculating deadline
-  await web3.eth.getBlock("latest", (error, block) => {
-    deadline = block.timestamp + 600; // transaction expires in 600 seconds (10 minutes)
-  });
-
-  deadline = web3.utils.toHex(deadline);
 
   let close_swap = UNISWAP_ROUTER.methods.swapTokensForExactETH(
     (DELTA * WEI).toString(),
@@ -135,29 +131,40 @@ export default async function handleTransaction(
     from: user_wallet.address,
     to: UNISWAP_ROUTER_ADDRESS,
     gas: (300000).toString(),
-    gasPrice: gasPrice * 0.7,
+    gasPrice: parseInt(gasPrice * 0.7),
     data: close_encodedABI,
-    value: 0,
-    chainId: 1,
+    value: 1,
+    chainId: isRopsten ? 3 : 1, // mainnet = 1
+    nonce: nonce + 1,
   };
 
+  let rawCloseTransaction;
   await user_wallet.signTransaction(close_tx).then((encodedTransaction) => {
-    rawTransaction = encodedTransaction.rawTransaction;
+    rawCloseTransaction = encodedTransaction.rawTransaction;
     closeTxnHash = encodedTransaction.transactionHash;
   });
 
-  logToDynamo(victimTxnHash, openTxnHash, closeTxnHash);
-
-  await web3.eth
-    .sendSignedTransaction(rawTransaction)
+  web3_finalstep.eth
+    .sendSignedTransaction(rawOpenTransaction)
     .on("transactionHash", function (hash) {
-      console.log("transactionHash: ", hash);
-    })
-    .on("confirmation", function (confirmationNumber, receipt) {
-      console.log("confirmationNumber: ", confirmationNumber);
+      console.log(
+        `FRONTRUNNING ${transaction.hash.substring(0, 10)} with ${hash}`
+      );
     })
     .on("error", function (error, receipt) {
-      // If the transaction was rejected by the network with a receipt, the second parameter will be the receipt.
-      console.log("error: ", error);
+      console.log("error: ", error.message);
     });
+
+  web3_finalstep.eth
+    .sendSignedTransaction(rawCloseTransaction)
+    .on("transactionHash", function (hash) {
+      console.log(
+        `BACK-RUNNING ${transaction.hash.substring(0, 10)} with ${hash}`
+      );
+    })
+    .on("error", function (error, receipt) {
+      console.log("error: ", error.message);
+    });
+
+  logToDynamo(victimTxnHash, openTxnHash, closeTxnHash);
 }
